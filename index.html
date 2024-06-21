@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-image: url('1718605413739.jpg');
+            background-size: cover;
+        }
+        form {
+            max-width: 300px;
+            margin: 0 auto 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            background-color: rgba(249, 249, 249, 0.8);
+        }
+        input[type="text"], input[type="password"] {
+            width: calc(100% - 20px);
+            padding: 10px;
+            margin: 8px 0;
+            display: inline-block;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        #chatSection {
+            display: none;
+            max-width: 600px;
+            width: 100%;
+            margin-top: 20px;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            background-color: rgba(249, 249, 249, 0.8);
+        }
+        #messages p {
+            margin: 10px 0;
+        }
+        #newMessage {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #sendMessage {
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        #userList {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .user {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .user img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Chat Page</h1>
+
+    <div id="loginSection">
+        <h2>Login</h2>
+        <form id="loginForm">
+            <label for="loginUsername">Username:</label>
+            <input type="text" id="loginUsername" name="loginUsername" required>
+            <label for="loginPassword">Password:</label>
+            <input type="password" id="loginPassword" name="loginPassword" required>
+            <input type="submit" value="Login">
+        </form>
+        <p>Don't have an account? <a href="#" id="showSignup">Sign Up</a></p>
+    </div>
+
+    <div id="signupSection" style="display: none;">
+        <h2>Sign Up</h2>
+        <form id="signupForm">
+            <label for="signupUsername">Username:</label>
+            <input type="text" id="signupUsername" name="signupUsername" required>
+            <label for="signupPassword">Password:</label>
+            <input type="password" id="signupPassword" name="signupPassword" required>
+            <label for="signupImage">Cover Image URL:</label>
+            <input type="text" id="signupImage" name="signupImage" placeholder="Image URL">
+            <input type="submit" value="Sign Up">
+        </form>
+        <p>Already have an account? <a href="#" id="showLogin">Login</a></p>
+    </div>
+
+    <div id="userList"></div>
+
+    <div id="chatSection">
+        <div id="messages"></div>
+        <input type="text" id="newMessage" placeholder="Type your message here...">
+        <button id="sendMessage">Send</button>
+    </div>
+
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+
+        let name = "?";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginSection = document.getElementById('loginSection');
+            const signupSection = document.getElementById('signupSection');
+            const chatSection = document.getElementById('chatSection');
+            const showSignupLink = document.getElementById('showSignup');
+            const showLoginLink = document.getElementById('showLogin');
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+            const messagesDiv = document.getElementById('messages');
+            const sendMessageBtn = document.getElementById('sendMessage');
+            const newMessageInput = document.getElementById('newMessage');
+            const userList = document.getElementById('userList');
+
+            showSignupLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                loginSection.style.display = 'none';
+                signupSection.style.display = 'block';
+            });
+
+            showLoginLink.addEventListener('click', (event) => {
+                event.preventDefault();
+                signupSection.style.display = 'none';
+                loginSection.style.display = 'block';
+            });
+
+            signupForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const username = document.getElementById('signupUsername').value;
+                const password = document.getElementById('signupPassword').value;
+                const image = document.getElementById('signupImage').value || 'https://via.placeholder.com/50'; // Default image if none provided
+                
+                const users = JSON.parse(localStorage.getItem('users')) || [];
+                if (users.some(user => user.username === username)) {
+                    alert('Username is already taken.');
+                    return;
+                }
+                if (username.length < 4 || username.length > 20) {
+                    alert('Username must be between 4 and 20 characters long.');
+                    return;
+                }
+                if (password.length < 6 || password.length > 10) {
+                    alert('Password must be between 6 and 10 characters long.');
+                    return;
+                }
+
+                users.push({ username, password, image });
+                localStorage.setItem('users', JSON.stringify(users));
+                signupSection.style.display = 'none';
+                loginSection.style.display = 'block';
+                loadUserList();
+            });
+
+            loginForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const username = document.getElementById('loginUsername').value;
+                const password = document.getElementById('loginPassword').value;
+                const users = JSON.parse(localStorage.getItem('users')) || [];
+                const user = users.find(user => user.username === username && user.password === password);
+                if (user) {
+                    localStorage.setItem('currentUser', username);
+                    chatSection.style.display = 'block';
+                    loginSection.style.display = 'none';
+                    loadMessages();
+                } else {
+                    alert('Invalid username or password');
+                }
+            });
+
+            sendMessageBtn.addEventListener('click', () => {
+                const message = newMessageInput.value;
+                if (message.trim()) {
+                    const username = localStorage.getItem('currentUser');
+                    const msg = { name: `<b>${username}</b>`, msg: message };
+                    socket.emit("chat", msg);
+                    newMessageInput.value = '';
+                }
+            });
+
+            socket.on("chat", function(message) {
+                addMessageToChat(message.name + ": " + message.msg);
+                let n = message.name.replace(/<b>/g, "").replace(/<\/b>/g, "");
+                let me = message.msg.replace(/<b>/g, "").replace(/<\/b>/g, "");
+                if (n !== localStorage.getItem('currentUser')) {
+                    const read = new SpeechSynthesisUtterance();
+                    read.text = n + ": " + me;
+                    window.speechSynthesis.speak(read);
+                }
+            });
+
+            socket.on("history", function(history) {
+                messagesDiv.innerHTML = history;
+            });
+
+            function addMessageToChat(message) {
+                const p = document.createElement('p');
+                p.innerHTML = message;
+                messagesDiv.appendChild(p);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+
+            function loadMessages() {
+                const storedMessages = JSON.parse(localStorage.getItem('messages')) || [];
+                storedMessages.forEach(message => addMessageToChat(message));
+            }
+
+            function loadUserList() {
+                userList.innerHTML = '';
+                const users = JSON.parse(localStorage.getItem('users')) || [];
+                users.forEach(user => {
+                    const userDiv = document.createElement('div');
+                    userDiv.classList.add('user');
+                    const userImg = document.createElement('img');
+                    userImg.src = user.image;
+                    const username = document.createElement('p');
+                    username.textContent = user.username;
+                    userDiv.appendChild(userImg);
+                    userDiv.appendChild(username);
+                    userList.appendChild(userDiv);
+                });
+            }
+
+            loadUserList();
+        });
+    </script>
+</body>
+</html>
